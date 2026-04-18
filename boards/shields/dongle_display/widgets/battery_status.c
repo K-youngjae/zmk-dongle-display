@@ -117,7 +117,7 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
     }
     #endif
     
-    lv_label_set_text_fmt(label, "%s %u", name, state.level);
+    lv_label_set_text_fmt(label, "%s %3u%% ", name, state.level);
     
     if (state.level > 0 || state.usb_present) {
         lv_obj_clear_flag(symbol, LV_OBJ_FLAG_HIDDEN);
