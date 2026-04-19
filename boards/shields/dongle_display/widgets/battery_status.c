@@ -111,9 +111,9 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
     }
     #else
     if (state.source == 0) {
-        name = "LH";
-    } else if (state.source == 1) {
         name = "RH";
+    } else if (state.source == 1) {
+        name = "LH";
     }
     #endif
     
