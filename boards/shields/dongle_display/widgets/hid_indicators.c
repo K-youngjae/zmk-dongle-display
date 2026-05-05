@@ -16,42 +16,30 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #include "hid_indicators.h"
 
-#define LED_NLCK 0x01
 #define LED_CLCK 0x02
 #define LED_SLCK 0x04
 
-struct hid_indicators_state {    
+struct hid_indicators_state {
     uint8_t hid_indicators;
 };
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
 static void set_hid_indicators(lv_obj_t *label, struct hid_indicators_state state) {
-    char text[7] = {};
-    bool lock = false;
-
     if (state.hid_indicators & LED_CLCK) {
-        strncat(text, "C", 2);
-        lock = true;
+        lv_label_set_text(label, "CAPS");
+    } else if (state.hid_indicators & LED_SLCK) {
+        lv_label_set_text(label, "SCRLK");
+    } else {
+        lv_label_set_text(label, "");
     }
-    if (state.hid_indicators & LED_NLCK) {
-        strncat(text, "N", 2);
-        lock = true;
-    }
-    if (state.hid_indicators & LED_SLCK) {
-        strncat(text, "S", 2);
-        lock = true;
-    }
-    if (lock) {
-        strncat(text, "LCK", 4);
-    }
-
-    lv_label_set_text(label, text);
 }
 
 void hid_indicators_update_cb(struct hid_indicators_state state) {
     struct zmk_widget_hid_indicators *widget;
-    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { set_hid_indicators(widget->obj, state); }
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        set_hid_indicators(widget->obj, state);
+    }
 }
 
 static struct hid_indicators_state hid_indicators_get_state(const zmk_event_t *eh) {
