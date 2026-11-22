@@ -16,9 +16,9 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #include "hid_indicators.h"
 
-#define LED_NLCK 0x01
+// HID LED status from the host. Num Lock and Scroll Lock are intentionally
+// hidden: Cornix NUM sends number-row codes, not keypad codes.
 #define LED_CLCK 0x02
-#define LED_SLCK 0x04
 
 struct hid_indicators_state {
     uint8_t hid_indicators;
@@ -27,29 +27,11 @@ struct hid_indicators_state {
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
 static void set_hid_indicators(lv_obj_t *label, struct hid_indicators_state state) {
-    char text[7] = {};
-    bool lock = false;
-
     if (state.hid_indicators & LED_CLCK) {
-        strncat(text, "C", 2);
-        lock = true;
+        lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
     }
-
-    if (state.hid_indicators & LED_NLCK) {
-        strncat(text, "N", 2);
-        lock = true;
-    }
-
-    if (state.hid_indicators & LED_SLCK) {
-        strncat(text, "S", 2);
-        lock = true;
-    }
-
-    if (lock) {
-        strncat(text, "LCK", 4);
-    }
-
-    lv_label_set_text(label, text);
 }
 
 void hid_indicators_update_cb(struct hid_indicators_state state) {
@@ -77,6 +59,17 @@ ZMK_SUBSCRIPTION(widget_hid_indicators, zmk_hid_indicators_changed);
 
 int zmk_widget_hid_indicators_init(struct zmk_widget_hid_indicators *widget, lv_obj_t *parent) {
     widget->obj = lv_label_create(parent);
+    lv_label_set_text(widget->obj, "CAPS");
+    lv_label_set_long_mode(widget->obj, LV_LABEL_LONG_CLIP);
+
+    // A 40x10 outlined indicator fits directly below the 50x26 cat.
+    lv_obj_set_size(widget->obj, 40, 10);
+    lv_obj_set_style_text_align(widget->obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(widget->obj, 0, LV_PART_MAIN);
+    lv_obj_set_style_border_width(widget->obj, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(widget->obj, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(widget->obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_add_flag(widget->obj, LV_OBJ_FLAG_HIDDEN);
 
     sys_slist_append(&widgets, &widget->node);
 

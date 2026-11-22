@@ -80,9 +80,9 @@ lv_obj_t *zmk_display_status_screen() {
 
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
     zmk_widget_hid_indicators_init(&hid_indicators_widget, screen);
-    lv_obj_align_to(zmk_widget_hid_indicators_obj(&hid_indicators_widget),
-                    zmk_widget_modifiers_obj(&modifiers_widget),
-                    LV_ALIGN_OUT_TOP_LEFT, 0, -2);
+    // Show Caps Lock only, below the Bongo Cat at the bottom-right.
+    lv_obj_align(zmk_widget_hid_indicators_obj(&hid_indicators_widget),
+                 LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 #endif
 
 #endif
@@ -90,13 +90,17 @@ lv_obj_t *zmk_display_status_screen() {
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_LAYER)
     zmk_widget_layer_status_init(&layer_status_widget, screen);
 
-#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_BONGO_CAT)
-    lv_obj_align_to(zmk_widget_layer_status_obj(&layer_status_widget),
-                    zmk_widget_bongo_cat_obj(&bongo_cat_widget),
-                    LV_ALIGN_BOTTOM_RIGHT, 0, 5);
-#else
-    lv_obj_align(zmk_widget_layer_status_obj(&layer_status_widget), LV_ALIGN_BOTTOM_RIGHT, 0, -3);
-#endif
+    // A legible, dedicated layer name replaces the old NLCK/SLCK area.
+    lv_obj_align(zmk_widget_layer_status_obj(&layer_status_widget),
+                 LV_ALIGN_TOP_LEFT, 3, 28);
+
+    // One-pixel divider underneath the layer label, above the modifier row.
+    static const lv_point_precise_t layer_divider_points[] = {{0, 0}, {67, 0}};
+    lv_obj_t *layer_divider = lv_line_create(screen);
+    lv_line_set_points(layer_divider, layer_divider_points, 2);
+    lv_obj_set_style_line_color(layer_divider, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_line_width(layer_divider, 1, LV_PART_MAIN);
+    lv_obj_align(layer_divider, LV_ALIGN_TOP_LEFT, 3, 46);
 
 #endif
 

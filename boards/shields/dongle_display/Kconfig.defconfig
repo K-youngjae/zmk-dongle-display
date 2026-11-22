@@ -15,6 +15,7 @@ config ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
     select LV_USE_ANIMATION
     select LV_USE_LINE 
     select LV_FONT_UNSCII_8
+    select LV_FONT_UNSCII_16
     select ZMK_WPM
     imply ZMK_HID_INDICATORS
 
@@ -39,7 +40,7 @@ config ZMK_DONGLE_DISPLAY_LAYER
 
 config ZMK_DONGLE_DISPLAY_LAYER_NAME_SCROLL_WIDTH
     int "Width for layer name label (in pixels)"
-    default 50
+    default 72
     help
         Width in pixels for the layer name label. When the layer name
         exceeds this width, it will scroll horizontally in a circular pattern.
