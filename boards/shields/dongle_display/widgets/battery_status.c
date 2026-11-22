@@ -75,49 +75,29 @@ ZMK_SUBSCRIPTION(widget_battery_preview, zmk_position_state_changed);
 
 
 static void draw_battery(lv_obj_t *canvas, uint8_t level, bool usb_present) {
-    lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER);
+    // Preserve the exact original 5x8 battery shape and fill-level logic.
+    // Only exchange black and white when its row is in low-battery mode.
+    bool low_battery = level > 0 && level <= 15;
+    lv_color_t background = low_battery ? lv_color_white() : lv_color_black();
+    lv_color_t ink = low_battery ? lv_color_black() : lv_color_white();
 
-    // On this SH1106, display inversion makes LVGL white appear dark.
-    // The original level-only glyph has no complete battery outline, so it
-    // becomes hard to recognize against a low-battery inverted row.
-    // Draw a fixed, 5x8 dark battery outline on the existing light background.
-    // Its dimensions and LVGL object alignment are unchanged.
-    if (level > 0 && level <= 15) {
-        static const uint8_t low_battery_pixels[8] = {
-            0x04, // ..#..  cap
-            0x0E, // .###.
-            0x1F, // #####  upper rim
-            0x11, // #...#
-            0x11, // #...#
-            0x11, // #...#
-            0x1F, // #####  low charge bar
-            0x1F, // #####  lower rim
-        };
-        for (uint8_t y = 0; y < 8; y++) {
-            for (uint8_t x = 0; x < 5; x++) {
-                if (low_battery_pixels[y] & (1u << (4 - x))) {
-                    lv_canvas_set_px(canvas, x, y, lv_color_white(), LV_OPA_COVER);
-                }
-            }
-        }
-        return;
-    }
-
+    lv_canvas_fill_bg(canvas, background, LV_OPA_COVER);
+    
     lv_layer_t layer;
     lv_canvas_init_layer(canvas, &layer);
 
     lv_draw_rect_dsc_t rect_fill_dsc;
     lv_draw_rect_dsc_init(&rect_fill_dsc);
-    rect_fill_dsc.bg_color = lv_color_white();
+    rect_fill_dsc.bg_color = ink;
 
     if (usb_present) {
         rect_fill_dsc.bg_opa = LV_OPA_TRANSP;
-        rect_fill_dsc.border_color = lv_color_white();
+        rect_fill_dsc.border_color = ink;
         rect_fill_dsc.border_width = 1;
     }
 
-    lv_canvas_set_px(canvas, 0, 0, lv_color_white(), LV_OPA_COVER);
-    lv_canvas_set_px(canvas, 4, 0, lv_color_white(), LV_OPA_COVER);
+    lv_canvas_set_px(canvas, 0, 0, ink, LV_OPA_COVER);
+    lv_canvas_set_px(canvas, 4, 0, ink, LV_OPA_COVER);
 
     lv_area_t rect_coords;
     bool rect_draw = true;
