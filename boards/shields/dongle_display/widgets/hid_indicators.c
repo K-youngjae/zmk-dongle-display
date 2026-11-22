@@ -34,13 +34,15 @@ static void set_hid_indicators(lv_obj_t *label, struct hid_indicators_state stat
     if (state.caps_lock) {
         // Caps Lock takes precedence if both modes are enabled.
         lv_label_set_text(label, "CAPS");
+        lv_obj_set_style_pad_left(label, 0, LV_PART_MAIN);
         lv_obj_set_style_pad_right(label, 0, LV_PART_MAIN);
         lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
     } else if (state.caps_word) {
         lv_label_set_text(label, "WORD");
-        // Nudge only WORD's text 1px left inside the fixed 40x10 border.
-        // Right padding of 2px moves centered content left by 1px.
-        lv_obj_set_style_pad_right(label, 2, LV_PART_MAIN);
+        // WORD visually crowds the left border. Shift its centered text
+        // 1px right by adding 2px to the content area's left padding.
+        lv_obj_set_style_pad_left(label, 2, LV_PART_MAIN);
+        lv_obj_set_style_pad_right(label, 0, LV_PART_MAIN);
         lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
