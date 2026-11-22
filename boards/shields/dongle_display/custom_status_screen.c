@@ -92,10 +92,10 @@ lv_obj_t *zmk_display_status_screen() {
 
     // A legible, dedicated layer name replaces the old NLCK/SLCK area.
     lv_obj_align(zmk_widget_layer_status_obj(&layer_status_widget),
-                 LV_ALIGN_TOP_LEFT, 3, 28);
+                 LV_ALIGN_TOP_LEFT, 3, 30);
 
     // One-pixel divider underneath the layer label, above the modifier row.
-    static const lv_point_precise_t layer_divider_points[] = {{0, 0}, {67, 0}};
+    static const lv_point_precise_t layer_divider_points[] = {{0, 0}, {58, 0}};
     lv_obj_t *layer_divider = lv_line_create(screen);
     lv_line_set_points(layer_divider, layer_divider_points, 2);
     lv_obj_set_style_line_color(layer_divider, lv_color_black(), LV_PART_MAIN);

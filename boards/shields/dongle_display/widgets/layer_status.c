@@ -59,8 +59,8 @@ ZMK_SUBSCRIPTION(widget_layer_status, zmk_layer_state_changed);
 
 int zmk_widget_layer_status_init(struct zmk_widget_layer_status *widget, lv_obj_t *parent) {
     widget->obj = lv_label_create(parent);
-    // 16-pixel bitmap font keeps the active layer readable at 128x64.
-    lv_obj_set_style_text_font(widget->obj, &lv_font_unscii_16, LV_PART_MAIN);
+    // A smaller 14-pixel font leaves breathing room beside the batteries.
+    lv_obj_set_style_text_font(widget->obj, &lv_font_montserrat_14, LV_PART_MAIN);
     lv_obj_set_style_text_letter_space(widget->obj, 0, LV_PART_MAIN);
     lv_obj_set_width(widget->obj, CONFIG_ZMK_DONGLE_DISPLAY_LAYER_NAME_SCROLL_WIDTH);
     lv_label_set_long_mode(widget->obj, LV_LABEL_LONG_SCROLL_CIRCULAR);
