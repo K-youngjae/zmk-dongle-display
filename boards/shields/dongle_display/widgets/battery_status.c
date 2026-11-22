@@ -76,7 +76,33 @@ ZMK_SUBSCRIPTION(widget_battery_preview, zmk_position_state_changed);
 
 static void draw_battery(lv_obj_t *canvas, uint8_t level, bool usb_present) {
     lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER);
-    
+
+    // On this SH1106, display inversion makes LVGL white appear dark.
+    // The original level-only glyph has no complete battery outline, so it
+    // becomes hard to recognize against a low-battery inverted row.
+    // Draw a fixed, 5x8 dark battery outline on the existing light background.
+    // Its dimensions and LVGL object alignment are unchanged.
+    if (level > 0 && level <= 15) {
+        static const uint8_t low_battery_pixels[8] = {
+            0x04, // ..#..  cap
+            0x0E, // .###.
+            0x1F, // #####  upper rim
+            0x11, // #...#
+            0x11, // #...#
+            0x11, // #...#
+            0x1F, // #####  low charge bar
+            0x1F, // #####  lower rim
+        };
+        for (uint8_t y = 0; y < 8; y++) {
+            for (uint8_t x = 0; x < 5; x++) {
+                if (low_battery_pixels[y] & (1u << (4 - x))) {
+                    lv_canvas_set_px(canvas, x, y, lv_color_white(), LV_OPA_COVER);
+                }
+            }
+        }
+        return;
+    }
+
     lv_layer_t layer;
     lv_canvas_init_layer(canvas, &layer);
 
