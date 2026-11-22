@@ -31,13 +31,8 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #  define ZMK_SPLIT_BLE_PERIPHERAL_COUNT 0
 #endif
 
-// Keep the original 5x8 glyph pinned to the same right-edge pixel position.
-// The extra 3 columns are a dark separator drawn on the SAME foreground canvas.
-#define BATTERY_ICON_WIDTH 5
-#define BATTERY_ICON_HEIGHT 8
-#define BATTERY_GAP_WIDTH 3
-#define BATTERY_CANVAS_WIDTH (BATTERY_ICON_WIDTH + BATTERY_GAP_WIDTH)
-#define BUFFER_SIZE LV_CANVAS_BUF_SIZE(BATTERY_CANVAS_WIDTH, BATTERY_ICON_HEIGHT, LV_COLOR_FORMAT_GET_BPP(LV_COLOR_FORMAT_L8), LV_DRAW_BUF_STRIDE_ALIGN)
+#define BATTERY_HIGHLIGHT_GAP_PX 3
+#define BUFFER_SIZE LV_CANVAS_BUF_SIZE(5, 8, LV_COLOR_FORMAT_GET_BPP(LV_COLOR_FORMAT_L8), LV_DRAW_BUF_STRIDE_ALIGN)
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
@@ -50,6 +45,7 @@ struct battery_state {
 struct battery_object {
     lv_obj_t *symbol;
     lv_obj_t *label;
+    lv_obj_t *highlight;
 } battery_objects[ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET];
     
 static lv_color_t battery_image_buffer[ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET][BUFFER_SIZE];
@@ -96,8 +92,8 @@ static void draw_battery(lv_obj_t *canvas, uint8_t level, bool usb_present) {
         rect_fill_dsc.border_width = 1;
     }
 
-    lv_canvas_set_px(canvas, BATTERY_GAP_WIDTH, 0, lv_color_white(), LV_OPA_COVER);
-    lv_canvas_set_px(canvas, BATTERY_GAP_WIDTH + 4, 0, lv_color_white(), LV_OPA_COVER);
+    lv_canvas_set_px(canvas, 0, 0, lv_color_white(), LV_OPA_COVER);
+    lv_canvas_set_px(canvas, 4, 0, lv_color_white(), LV_OPA_COVER);
 
     lv_area_t rect_coords;
     bool rect_draw = true;
@@ -117,23 +113,10 @@ static void draw_battery(lv_obj_t *canvas, uint8_t level, bool usb_present) {
     }
 
     if (rect_draw) {
-        // The charge bar stays in the same five display columns as before.
-        rect_coords.x1 += BATTERY_GAP_WIDTH;
-        rect_coords.x2 += BATTERY_GAP_WIDTH;
         lv_draw_rect(&layer, &rect_fill_dsc, &rect_coords);
     }
 
     lv_canvas_finish_layer(canvas, &layer);
-
-    // Explicitly paint a physical black separator in the three new left
-    // columns (SH1106's inversion-on maps LVGL white to the dark screen).
-    // Because this is part of the foreground battery canvas it cannot be
-    // hidden behind or repositioned by the text label's opaque background.
-    for (int y = 0; y < BATTERY_ICON_HEIGHT; y++) {
-        for (int x = 0; x < BATTERY_GAP_WIDTH; x++) {
-            lv_canvas_set_px(canvas, x, y, lv_color_white(), LV_OPA_COVER);
-        }
-    }
 }
 
 static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
@@ -143,6 +126,7 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
     LOG_DBG("source: %d, level: %d, usb: %d", state.source, state.level, state.usb_present);
     lv_obj_t *symbol = battery_objects[state.source].symbol;
     lv_obj_t *label = battery_objects[state.source].label;
+    lv_obj_t *highlight = battery_objects[state.source].highlight;
 
     draw_battery(symbol, state.level, state.usb_present);
     const char *name = "?";
@@ -165,27 +149,39 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
     
     lv_label_set_text_fmt(label, "%s%3u%% ", name, state.level);
 
-    // Only the text is inverted for low battery; the original 5x8 icon
-    // remains unchanged. Its widened canvas supplies a fixed 3px dark gap
-    // on top of the trailing-space region, without shifting text or icon.
-    // Keep 0% hidden as before (it can also indicate no battery report).
+    // Use an independent rectangle for the low-battery inverted background.
+    // The text label and original 5x8 glyph never move, and the label's
+    // trailing space remains intact. Clip the rectangle 3px before the icon.
     bool low_battery = state.level > 0 && state.level <= 15;
-    lv_obj_set_style_bg_color(label, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(label, low_battery ? LV_OPA_COVER : LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(label, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_text_color(label, low_battery ? lv_color_white() : lv_color_black(),
                                 LV_PART_MAIN);
+
+    if (low_battery) {
+        // Label text metrics may change after updating its contents.
+        lv_obj_update_layout(label);
+        int32_t label_width = lv_obj_get_width(label);
+        int32_t bg_width = label_width > BATTERY_HIGHLIGHT_GAP_PX
+                               ? label_width - BATTERY_HIGHLIGHT_GAP_PX : 0;
+        lv_obj_set_size(highlight, bg_width, lv_obj_get_height(label));
+        lv_obj_align_to(highlight, label, LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_clear_flag(highlight, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_background(highlight);
+    } else {
+        lv_obj_add_flag(highlight, LV_OBJ_FLAG_HIDDEN);
+    }
 
     if (state.level > 0 || state.usb_present) {
         lv_obj_clear_flag(symbol, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(label, LV_OBJ_FLAG_HIDDEN);
 
-        // The original icon AND its built-in separator stay above the
-        // background of the inverted text. No independent mask object.
+        // Keep both text and the unchanged original icon above the rectangle.
         lv_obj_move_foreground(label);
         lv_obj_move_foreground(symbol);
     } else {
         lv_obj_add_flag(symbol, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(highlight, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -264,15 +260,25 @@ int zmk_widget_dongle_battery_status_init(struct zmk_widget_dongle_battery_statu
     for (int i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET; i++) {
         lv_obj_t *image_canvas = lv_canvas_create(widget->obj);
         lv_obj_t *battery_label = lv_label_create(widget->obj);
+        lv_obj_t *battery_highlight = lv_obj_create(widget->obj);
 
-        lv_canvas_set_buffer(image_canvas, battery_image_buffer[i],
-                             BATTERY_CANVAS_WIDTH, BATTERY_ICON_HEIGHT, LV_COLOR_FORMAT_L8);
+        // The highlighted background is a separate rectangular sibling,
+        // placed BEHIND the original label and icon. No extra border/padding.
+        lv_obj_set_style_bg_color(battery_highlight, lv_color_black(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(battery_highlight, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_border_width(battery_highlight, 0, LV_PART_MAIN);
+        lv_obj_set_style_radius(battery_highlight, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(battery_highlight, 0, LV_PART_MAIN);
+        lv_obj_set_style_shadow_width(battery_highlight, 0, LV_PART_MAIN);
+        lv_obj_remove_flag(battery_highlight, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(battery_highlight, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_background(battery_highlight);
+
+        // Original canvas size and original label/icon coordinates.
+        lv_canvas_set_buffer(image_canvas, battery_image_buffer[i], 5, 8, LV_COLOR_FORMAT_L8);
 
         lv_obj_align(image_canvas, LV_ALIGN_TOP_RIGHT, 0, i * 10);
-        // Widening the right-anchored canvas moves its left edge 3px left.
-        // Compensate by +3px so the original label stays at its exact x/y.
-        lv_obj_align_to(battery_label, image_canvas, LV_ALIGN_OUT_LEFT_MID,
-                        BATTERY_GAP_WIDTH, 0);
+        lv_obj_align_to(battery_label, image_canvas, LV_ALIGN_OUT_LEFT_MID, 0, 0);
 
         lv_obj_add_flag(image_canvas, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(battery_label, LV_OBJ_FLAG_HIDDEN);
@@ -280,6 +286,7 @@ int zmk_widget_dongle_battery_status_init(struct zmk_widget_dongle_battery_statu
         battery_objects[i] = (struct battery_object){
             .symbol = image_canvas,
             .label = battery_label,
+            .highlight = battery_highlight,
         };
     }
 
