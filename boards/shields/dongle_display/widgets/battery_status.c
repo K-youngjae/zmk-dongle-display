@@ -158,15 +158,24 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
                                 LV_PART_MAIN);
 
     if (low_battery) {
-        // Label text metrics may change after updating its contents.
-        lv_obj_update_layout(label);
-        int32_t label_width = lv_obj_get_width(label);
-        int32_t bg_width = label_width > BATTERY_HIGHLIGHT_GAP_PX
-                               ? label_width - BATTERY_HIGHLIGHT_GAP_PX : 0;
-        lv_obj_set_size(highlight, bg_width, lv_obj_get_height(label));
-        lv_obj_align_to(highlight, label, LV_ALIGN_LEFT_MID, 0, 0);
-        lv_obj_clear_flag(highlight, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_move_background(highlight);
+        // The rectangle's RIGHT EDGE must be calculated from the icon's
+        // actual screen position, not from the auto-sized label width.
+        // Keep both the original label and the 5x8 icon exactly where they are.
+        lv_obj_update_layout(widget);
+        int32_t label_left = lv_obj_get_x(label);
+        int32_t icon_left = lv_obj_get_x(symbol);
+        int32_t highlight_right = icon_left - BATTERY_HIGHLIGHT_GAP_PX;
+        int32_t highlight_width = highlight_right - label_left;
+        if (highlight_width > 0) {
+            lv_obj_set_size(highlight, highlight_width, lv_obj_get_height(label));
+            lv_obj_set_pos(highlight, label_left, lv_obj_get_y(label));
+            lv_obj_clear_flag(highlight, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_background(highlight);
+        } else {
+            lv_obj_add_flag(highlight, LV_OBJ_FLAG_HIDDEN);
+            LOG_WRN("Battery highlight bounds invalid: label x=%d, icon x=%d",
+                    (int)label_left, (int)icon_left);
+        }
     } else {
         lv_obj_add_flag(highlight, LV_OBJ_FLAG_HIDDEN);
     }
