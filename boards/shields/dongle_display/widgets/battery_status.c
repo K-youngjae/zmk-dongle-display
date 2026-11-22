@@ -158,9 +158,12 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
 
     if (state.level > 0 || state.usb_present) {
         lv_obj_clear_flag(symbol, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_move_foreground(symbol);
         lv_obj_clear_flag(label, LV_OBJ_FLAG_HIDDEN);
+
+        // Keep the existing battery glyph above the opaque low-battery label
+        // background. Reordering drawing only: no position or size changes.
         lv_obj_move_foreground(label);
+        lv_obj_move_foreground(symbol);
     } else {
         lv_obj_add_flag(symbol, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
