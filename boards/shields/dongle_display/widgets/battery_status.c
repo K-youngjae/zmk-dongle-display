@@ -161,7 +161,8 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
         // The rectangle's RIGHT EDGE must be calculated from the icon's
         // actual screen position, not from the auto-sized label width.
         // Keep both the original label and the 5x8 icon exactly where they are.
-        lv_obj_update_layout(widget);
+        // Preview dispatch passes NULL for widget; update layout via the live label.
+        lv_obj_update_layout(label);
         int32_t label_left = lv_obj_get_x(label);
         int32_t icon_left = lv_obj_get_x(symbol);
         int32_t highlight_right = icon_left - BATTERY_HIGHLIGHT_GAP_PX;
