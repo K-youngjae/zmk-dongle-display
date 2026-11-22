@@ -14,6 +14,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/ble.h>
 #include <zmk/display.h>
 #include <zmk/events/battery_state_changed.h>
+#include <zmk/events/position_state_changed.h>
 #include <zmk/events/usb_conn_state_changed.h>
 #include <zmk/event_manager.h>
 #include <zmk/usb.h>
@@ -46,6 +47,32 @@ struct battery_object {
 } battery_objects[ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET];
     
 static lv_color_t battery_image_buffer[ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET][BUFFER_SIZE];
+
+// Test branch only: actual LVGL widgets render synthetic battery readings.
+// Right encoder push (keymap position 31) cycles through the four scenarios.
+#define BATTERY_PREVIEW_SWITCH_POSITION 31
+#define BATTERY_PREVIEW_LEVEL_COUNT 4
+
+static const uint8_t battery_preview_levels[BATTERY_PREVIEW_LEVEL_COUNT]
+                                           [ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET] = {
+    {85, 70, 65}, // Normal
+    {85, 12, 65}, // RH low
+    {85, 12, 8},  // RH + LH low
+    {10, 12, 8},  // DG + RH + LH low
+};
+static uint8_t battery_preview_index = 0;
+
+struct battery_preview_state {
+    uint8_t index;
+};
+
+static void battery_preview_update_cb(struct battery_preview_state state);
+static struct battery_preview_state battery_preview_get_state(const zmk_event_t *eh);
+
+ZMK_DISPLAY_WIDGET_LISTENER(widget_battery_preview, struct battery_preview_state,
+                            battery_preview_update_cb, battery_preview_get_state)
+ZMK_SUBSCRIPTION(widget_battery_preview, zmk_position_state_changed);
+
 
 static void draw_battery(lv_obj_t *canvas, uint8_t level, bool usb_present) {
     lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER);
@@ -141,8 +168,28 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
 }
 
 void battery_status_update_cb(struct battery_state state) {
-    struct zmk_widget_dongle_battery_status *widget;
-    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { set_battery_symbol(widget->obj, state); }
+    // Do not let incoming real battery reports overwrite preview values.
+    ARG_UNUSED(state);
+}
+
+static void battery_preview_update_cb(struct battery_preview_state state) {
+    for (uint8_t i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET; i++) {
+        set_battery_symbol(NULL, (struct battery_state) {
+            .source = i,
+            .level = battery_preview_levels[state.index][i],
+            .usb_present = false,
+        });
+    }
+}
+
+static struct battery_preview_state battery_preview_get_state(const zmk_event_t *eh) {
+    if (eh != NULL) {
+        const struct zmk_position_state_changed *ev = as_zmk_position_state_changed(eh);
+        if (ev != NULL && ev->state && ev->position == BATTERY_PREVIEW_SWITCH_POSITION) {
+            battery_preview_index = (battery_preview_index + 1) % BATTERY_PREVIEW_LEVEL_COUNT;
+        }
+    }
+    return (struct battery_preview_state){.index = battery_preview_index};
 }
 
 static struct battery_state peripheral_battery_status_get_state(const zmk_event_t *eh) {
@@ -213,6 +260,8 @@ int zmk_widget_dongle_battery_status_init(struct zmk_widget_dongle_battery_statu
     sys_slist_append(&widgets, &widget->node);
 
     widget_dongle_battery_status_init();
+    // Draw normal synthetic readings immediately, then cycle on encoder clicks.
+    widget_battery_preview_init();
 
     return 0;
 }
