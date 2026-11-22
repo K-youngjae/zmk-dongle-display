@@ -44,6 +44,7 @@ struct battery_state {
 struct battery_object {
     lv_obj_t *symbol;
     lv_obj_t *label;
+    lv_obj_t *gap;
 } battery_objects[ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET];
     
 static lv_color_t battery_image_buffer[ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET][BUFFER_SIZE];
@@ -75,29 +76,23 @@ ZMK_SUBSCRIPTION(widget_battery_preview, zmk_position_state_changed);
 
 
 static void draw_battery(lv_obj_t *canvas, uint8_t level, bool usb_present) {
-    // Preserve the exact original 5x8 battery shape and fill-level logic.
-    // Only exchange black and white when its row is in low-battery mode.
-    bool low_battery = level > 0 && level <= 15;
-    lv_color_t background = low_battery ? lv_color_white() : lv_color_black();
-    lv_color_t ink = low_battery ? lv_color_black() : lv_color_white();
-
-    lv_canvas_fill_bg(canvas, background, LV_OPA_COVER);
+    lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER);
     
     lv_layer_t layer;
     lv_canvas_init_layer(canvas, &layer);
 
     lv_draw_rect_dsc_t rect_fill_dsc;
     lv_draw_rect_dsc_init(&rect_fill_dsc);
-    rect_fill_dsc.bg_color = ink;
+    rect_fill_dsc.bg_color = lv_color_white();
 
     if (usb_present) {
         rect_fill_dsc.bg_opa = LV_OPA_TRANSP;
-        rect_fill_dsc.border_color = ink;
+        rect_fill_dsc.border_color = lv_color_white();
         rect_fill_dsc.border_width = 1;
     }
 
-    lv_canvas_set_px(canvas, 0, 0, ink, LV_OPA_COVER);
-    lv_canvas_set_px(canvas, 4, 0, ink, LV_OPA_COVER);
+    lv_canvas_set_px(canvas, 0, 0, lv_color_white(), LV_OPA_COVER);
+    lv_canvas_set_px(canvas, 4, 0, lv_color_white(), LV_OPA_COVER);
 
     lv_area_t rect_coords;
     bool rect_draw = true;
@@ -130,6 +125,7 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
     LOG_DBG("source: %d, level: %d, usb: %d", state.source, state.level, state.usb_present);
     lv_obj_t *symbol = battery_objects[state.source].symbol;
     lv_obj_t *label = battery_objects[state.source].label;
+    lv_obj_t *gap = battery_objects[state.source].gap;
 
     draw_battery(symbol, state.level, state.usb_present);
     const char *name = "?";
@@ -152,9 +148,10 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
     
     lv_label_set_text_fmt(label, "%s%3u%% ", name, state.level);
 
-    // Low battery: reverse the existing 8px text label without changing its
-    // geometry. The adjacent 5x8 battery canvas already has a black background,
-    // so the inverted text and icon form one continuous highlighted row.
+    // Only the text is inverted for low battery. The original 5x8 battery
+    // icon remains completely unchanged and sits on the normal dark screen.
+    // A 2px screen-colour mask ends the highlight just before the icon,
+    // without moving the text or changing any existing widget's geometry.
     // Keep 0% hidden as before (it can also indicate no battery report).
     bool low_battery = state.level > 0 && state.level <= 15;
     lv_obj_set_style_bg_color(label, lv_color_black(), LV_PART_MAIN);
@@ -170,9 +167,16 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
         // background. Reordering drawing only: no position or size changes.
         lv_obj_move_foreground(label);
         lv_obj_move_foreground(symbol);
+        if (low_battery) {
+            lv_obj_clear_flag(gap, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(gap);
+        } else {
+            lv_obj_add_flag(gap, LV_OBJ_FLAG_HIDDEN);
+        }
     } else {
         lv_obj_add_flag(symbol, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(gap, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -251,18 +255,31 @@ int zmk_widget_dongle_battery_status_init(struct zmk_widget_dongle_battery_statu
     for (int i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET; i++) {
         lv_obj_t *image_canvas = lv_canvas_create(widget->obj);
         lv_obj_t *battery_label = lv_label_create(widget->obj);
+        lv_obj_t *battery_gap = lv_obj_create(widget->obj);
+
+        // A 2px visual separator, over the existing trailing-space area:
+        // never change text, glyph sizes, or their original positions.
+        lv_obj_set_size(battery_gap, 2, 10);
+        lv_obj_set_style_bg_color(battery_gap, lv_color_white(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(battery_gap, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_radius(battery_gap, 0, LV_PART_MAIN);
+        lv_obj_set_style_border_width(battery_gap, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(battery_gap, 0, LV_PART_MAIN);
 
         lv_canvas_set_buffer(image_canvas, battery_image_buffer[i], 5, 8, LV_COLOR_FORMAT_L8);
 
         lv_obj_align(image_canvas, LV_ALIGN_TOP_RIGHT, 0, i * 10);
         lv_obj_align_to(battery_label, image_canvas, LV_ALIGN_OUT_LEFT_MID, 0, 0);
+        lv_obj_align_to(battery_gap, image_canvas, LV_ALIGN_OUT_LEFT_MID, 0, 0);
 
         lv_obj_add_flag(image_canvas, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(battery_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(battery_gap, LV_OBJ_FLAG_HIDDEN);
         
         battery_objects[i] = (struct battery_object){
             .symbol = image_canvas,
             .label = battery_label,
+            .gap = battery_gap,
         };
     }
 
