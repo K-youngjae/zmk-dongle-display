@@ -118,7 +118,17 @@ static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
     #endif
     
     lv_label_set_text_fmt(label, "%s%3u%% ", name, state.level);
-    
+
+    // Low battery: reverse the existing 8px text label without changing its
+    // geometry. The adjacent 5x8 battery canvas already has a black background,
+    // so the inverted text and icon form one continuous highlighted row.
+    // Keep 0% hidden as before (it can also indicate no battery report).
+    bool low_battery = state.level > 0 && state.level <= 15;
+    lv_obj_set_style_bg_color(label, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(label, low_battery ? LV_OPA_COVER : LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, low_battery ? lv_color_white() : lv_color_black(),
+                                LV_PART_MAIN);
+
     if (state.level > 0 || state.usb_present) {
         lv_obj_clear_flag(symbol, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(symbol);
