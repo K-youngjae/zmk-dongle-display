@@ -256,8 +256,6 @@ int zmk_widget_dongle_battery_status_init(struct zmk_widget_dongle_battery_statu
     sys_slist_append(&widgets, &widget->node);
 
     widget_dongle_battery_status_init();
-    // Restore real battery events and initial reading (no synthetic preview).
-    widget_dongle_battery_status_init();
 
     return 0;
 }
