@@ -13,49 +13,69 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/display.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/hid_indicators_changed.h>
+#include <zmk/events/caps_word_state_changed.h>
 
 #include "hid_indicators.h"
 
-// HID LED status from the host. Num Lock and Scroll Lock are intentionally
-// hidden: Cornix NUM sends number-row codes, not keypad codes.
+// The host reports Caps Lock through HID LEDs. Caps Word is a local ZMK
+// behavior, so we listen to its extra state-change event separately.
 #define LED_CLCK 0x02
 
 struct hid_indicators_state {
-    uint8_t hid_indicators;
+    bool caps_lock;
+    bool caps_word;
 };
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
+static bool caps_lock_active;
+static bool caps_word_active;
 
 static void set_hid_indicators(lv_obj_t *label, struct hid_indicators_state state) {
-    if (state.hid_indicators & LED_CLCK) {
+    if (state.caps_lock) {
+        // Caps Lock takes precedence if both modes are enabled.
+        lv_label_set_text(label, "CAPS");
+        lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
+    } else if (state.caps_word) {
+        lv_label_set_text(label, "WORD");
         lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
-void hid_indicators_update_cb(struct hid_indicators_state state) {
+static void hid_indicators_update_cb(struct hid_indicators_state state) {
     struct zmk_widget_hid_indicators *widget;
-
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
         set_hid_indicators(widget->obj, state);
     }
 }
 
 static struct hid_indicators_state hid_indicators_get_state(const zmk_event_t *eh) {
-    struct zmk_hid_indicators_changed *ev = as_zmk_hid_indicators_changed(eh);
+    if (eh != NULL) {
+        struct zmk_hid_indicators_changed *host =
+            as_zmk_hid_indicators_changed(eh);
+        if (host != NULL) {
+            caps_lock_active = (host->indicators & LED_CLCK) != 0;
+        }
 
-    return (struct hid_indicators_state) {
-        .hid_indicators = ev->indicators,
+        struct zmk_caps_word_state_changed *word =
+            as_zmk_caps_word_state_changed(eh);
+        if (word != NULL) {
+            caps_word_active = word->active;
+        }
+    }
+
+    return (struct hid_indicators_state){
+        .caps_lock = caps_lock_active,
+        .caps_word = caps_word_active,
     };
 }
 
-ZMK_DISPLAY_WIDGET_LISTENER(widget_hid_indicators,
-                            struct hid_indicators_state,
-                            hid_indicators_update_cb,
-                            hid_indicators_get_state)
+ZMK_DISPLAY_WIDGET_LISTENER(widget_hid_indicators, struct hid_indicators_state,
+                            hid_indicators_update_cb, hid_indicators_get_state)
 
 ZMK_SUBSCRIPTION(widget_hid_indicators, zmk_hid_indicators_changed);
+ZMK_SUBSCRIPTION(widget_hid_indicators, zmk_caps_word_state_changed);
 
 int zmk_widget_hid_indicators_init(struct zmk_widget_hid_indicators *widget, lv_obj_t *parent) {
     widget->obj = lv_label_create(parent);
